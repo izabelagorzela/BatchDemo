@@ -1,4 +1,5 @@
 package gorzela.izabela.BatchDemo.domain;
 
-public record Person (String id, String name, String dateCreation) {
+
+public record Person (Integer id, String name, String creationDate) {
 }

@@ -14,7 +14,6 @@ import org.springframework.batch.item.database.JdbcBatchItemWriter;
 import org.springframework.batch.item.database.builder.JdbcBatchItemWriterBuilder;
 import org.springframework.batch.item.file.FlatFileItemReader;
 import org.springframework.batch.item.file.builder.FlatFileItemReaderBuilder;
-import org.springframework.batch.item.file.mapping.RecordFieldSetMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -32,39 +31,41 @@ public class BatchConfiguration {
     @Value("${file.input}")
     private String fileInput;
     @Bean
-    FlatFileItemReader<Person> personReader() {
+    FlatFileItemReader<Person> personReaderBean() {
         return new FlatFileItemReaderBuilder<Person>()
                 .name("personReader")
                 .resource(new ClassPathResource(fileInput))
                 .delimited()
-                .names("id", "name", "dateCreation")
-                .fieldSetMapper(new RecordFieldSetMapper<>(Person.class))
+                .names("id", "name", "creationDate")
+                .targetType(Person.class)
+                .linesToSkip(1)
                 .build();
     }
 
     @Bean
-    public JdbcBatchItemWriter<Person> personWriter(DataSource dataSource) {
+    public JdbcBatchItemWriter<Person> personWriterBean(DataSource dataSource) {
         return new JdbcBatchItemWriterBuilder<Person>()
                 .itemSqlParameterSourceProvider(new BeanPropertyItemSqlParameterSourceProvider<>())
-                .sql("INSERT INTO person (id, name, dateCreation) VALUES (:id, :name, :dateCreation)")
+                .sql("INSERT INTO person (id, name, creationDate) VALUES (:id, :name, :creationDate)")
                 .dataSource(dataSource)
                 .build();
     }
 
     @Bean
-    public Job personJob(JobExecutionListener personJobListener, JobRepository jobRepository, Step step1) {
-        return new JobBuilder("UserJob", jobRepository)
-                .listener(personJobListener)
-                .flow(step1)
-                .end()
-                .build();
+    public ItemProcessor<Person, Person> personProcessorBean() {
+        return new ItemProcessor<Person, Person>() {
+            @Override
+            public Person process(@NonNull Person person) throws Exception {
+                return person;
+            }
+        };
     }
 
     @Bean
-    public Step step1(JobRepository jobRepository, PlatformTransactionManager transactionManager,
-                      FlatFileItemReader<Person> personReader,
-                      ItemProcessor<Person, Person> personProcessor,
-                      JdbcBatchItemWriter<Person> personWriter
+    public Step step1Bean(JobRepository jobRepository, PlatformTransactionManager transactionManager,
+                          FlatFileItemReader<Person> personReader,
+                          ItemProcessor<Person, Person> personProcessor,
+                          JdbcBatchItemWriter<Person> personWriter
     ) {
         return new StepBuilder("step1", jobRepository)
                 .<Person, Person> chunk(10, transactionManager)
@@ -75,17 +76,7 @@ public class BatchConfiguration {
     }
 
     @Bean
-    public ItemProcessor<Person, Person> personProcessor() {
-        return new ItemProcessor<Person, Person>() {
-            @Override
-            public Person process(@NonNull Person person) throws Exception {
-                return person;
-            }
-        };
-    }
-
-    @Bean
-    public JobExecutionListener personJobListener() {
+    public JobExecutionListener personJobListenerBean() {
         return new JobExecutionListener() {
             @Override
             public void beforeJob(final JobExecution jobExecution) {
@@ -100,5 +91,14 @@ public class BatchConfiguration {
                 }
             }
         };
+    }
+
+    @Bean
+    public Job personJobBean(JobRepository jobRepository, JobExecutionListener personJobListener, Step step1) {
+        return new JobBuilder("UserJob", jobRepository)
+                .listener(personJobListener)
+                .flow(step1)
+                .end()
+                .build();
     }
 }
