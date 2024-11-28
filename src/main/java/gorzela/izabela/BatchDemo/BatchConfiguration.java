@@ -22,6 +22,8 @@ import org.springframework.lang.NonNull;
 import org.springframework.transaction.PlatformTransactionManager;
 
 import javax.sql.DataSource;
+import java.time.Instant;
+import java.time.ZoneId;
 
 
 @Configuration
@@ -32,12 +34,17 @@ public class BatchConfiguration {
     private String fileInput;
     @Bean
     FlatFileItemReader<Person> personReaderBean() {
+
         return new FlatFileItemReaderBuilder<Person>()
                 .name("personReader")
                 .resource(new ClassPathResource(fileInput))
                 .delimited()
                 .names("id", "name", "creationDate")
-                .targetType(Person.class)
+                .fieldSetMapper(fieldSet -> Person.builder()
+                        .id(fieldSet.readInt("id"))
+                        .name(fieldSet.readString("name"))
+                        .creationDate(Instant.ofEpochMilli(fieldSet.readDate("creationDate", "dd.MM.yyyy").getTime()).atZone(ZoneId.systemDefault()).toLocalDate())
+                        .build())
                 .linesToSkip(1)
                 .build();
     }
