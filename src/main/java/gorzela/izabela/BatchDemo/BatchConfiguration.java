@@ -8,10 +8,9 @@ import org.springframework.batch.core.*;
 import org.springframework.batch.core.job.builder.JobBuilder;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.builder.StepBuilder;
+import org.springframework.batch.item.Chunk;
 import org.springframework.batch.item.ItemProcessor;
-import org.springframework.batch.item.database.BeanPropertyItemSqlParameterSourceProvider;
-import org.springframework.batch.item.database.JdbcBatchItemWriter;
-import org.springframework.batch.item.database.builder.JdbcBatchItemWriterBuilder;
+import org.springframework.batch.item.ItemWriter;
 import org.springframework.batch.item.file.FlatFileItemReader;
 import org.springframework.batch.item.file.builder.FlatFileItemReaderBuilder;
 import org.springframework.beans.factory.annotation.Value;
@@ -20,8 +19,6 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.lang.NonNull;
 import org.springframework.transaction.PlatformTransactionManager;
-
-import javax.sql.DataSource;
 import java.time.Instant;
 import java.time.ZoneId;
 
@@ -48,14 +45,16 @@ public class BatchConfiguration {
                 .linesToSkip(1)
                 .build();
     }
-
     @Bean
-    public JdbcBatchItemWriter<Person> personWriterBean(DataSource dataSource) {
-        return new JdbcBatchItemWriterBuilder<Person>()
-                .itemSqlParameterSourceProvider(new BeanPropertyItemSqlParameterSourceProvider<>())
-                .sql("INSERT INTO person (id, name, creationDate) VALUES (:id, :name, :creationDate)")
-                .dataSource(dataSource)
-                .build();
+    public ItemWriter<Person> personWriterBean() {
+        return new ItemWriter<Person>() {
+            @Override
+            public void write(Chunk<? extends Person> chunk) throws Exception {
+                for(Person person : chunk) {
+                    System.out.println(person);
+                }
+            }
+        };
     }
 
     @Bean
@@ -72,7 +71,7 @@ public class BatchConfiguration {
     public Step step1Bean(JobRepository jobRepository, PlatformTransactionManager transactionManager,
                           FlatFileItemReader<Person> personReader,
                           ItemProcessor<Person, Person> personProcessor,
-                          JdbcBatchItemWriter<Person> personWriter
+                          ItemWriter<Person> personWriter
     ) {
         return new StepBuilder("step1", jobRepository)
                 .<Person, Person> chunk(10, transactionManager)
