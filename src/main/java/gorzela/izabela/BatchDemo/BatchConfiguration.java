@@ -13,14 +13,16 @@ import org.springframework.batch.item.ItemProcessor;
 import org.springframework.batch.item.ItemWriter;
 import org.springframework.batch.item.file.FlatFileItemReader;
 import org.springframework.batch.item.file.builder.FlatFileItemReaderBuilder;
+import org.springframework.batch.item.support.CompositeItemProcessor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ClassPathResource;
-import org.springframework.lang.NonNull;
 import org.springframework.transaction.PlatformTransactionManager;
+
 import java.time.Instant;
 import java.time.ZoneId;
+import java.util.Arrays;
 
 
 @Configuration
@@ -29,8 +31,9 @@ public class BatchConfiguration {
     private static final Logger log = LoggerFactory.getLogger(BatchConfiguration.class);
     @Value("${file.input}")
     private String fileInput;
+
     @Bean
-    FlatFileItemReader<Person> personReaderBean() {
+    public FlatFileItemReader<Person> personReaderBean() {
 
         return new FlatFileItemReaderBuilder<Person>()
                 .name("personReader")
@@ -45,38 +48,37 @@ public class BatchConfiguration {
                 .linesToSkip(1)
                 .build();
     }
+
     @Bean
-    public ItemWriter<Person> personWriterBean() {
-        return new ItemWriter<Person>() {
+    public ItemWriter<String> personWriterBean() {
+        return new ItemWriter<String>() {
             @Override
-            public void write(Chunk<? extends Person> chunk) throws Exception {
-                for(Person person : chunk) {
-                    System.out.println(person);
+            public void write(Chunk<? extends String> chunk) throws Exception {
+                for(String personAsString : chunk) {
+                    System.out.println(personAsString);
                 }
             }
         };
     }
 
     @Bean
-    public ItemProcessor<Person, Person> personProcessorBean() {
-        return new ItemProcessor<Person, Person>() {
-            @Override
-            public Person process(@NonNull Person person) throws Exception {
-                return person;
-            }
-        };
+    public CompositeItemProcessor<Person, String> compositeItemProcessorBean(ItemProcessor<Person, Person> filteringProcessor, ItemProcessor<Person, String> mappingProcessor) throws Exception {
+        CompositeItemProcessor<Person, String> processor = new CompositeItemProcessor<>();
+        processor.setDelegates(Arrays.asList(filteringProcessor, mappingProcessor));
+        processor.afterPropertiesSet();
+        return processor;
     }
 
     @Bean
     public Step step1Bean(JobRepository jobRepository, PlatformTransactionManager transactionManager,
                           FlatFileItemReader<Person> personReader,
-                          ItemProcessor<Person, Person> personProcessor,
-                          ItemWriter<Person> personWriter
+                          CompositeItemProcessor<Person, String> compositeItemProcessor,
+                          ItemWriter<String> personWriter
     ) {
         return new StepBuilder("step1", jobRepository)
-                .<Person, Person> chunk(10, transactionManager)
+                .<Person, String> chunk(10, transactionManager)
                 .reader(personReader)
-                .processor(personProcessor)
+                .processor(compositeItemProcessor)
                 .writer(personWriter)
                 .build();
     }
