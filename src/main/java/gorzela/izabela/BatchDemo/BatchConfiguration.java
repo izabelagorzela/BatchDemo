@@ -73,32 +73,19 @@ public class BatchConfiguration {
     public Step step1Bean(JobRepository jobRepository, PlatformTransactionManager transactionManager,
                           FlatFileItemReader<Person> personReader,
                           CompositeItemProcessor<Person, String> compositeItemProcessor,
-                          ItemWriter<String> personWriter
+                          ItemWriter<String> personWriter, StepExecutionListener emptyInputListener, ItemReadListener<Person> personItemReadListener
     ) {
         return new StepBuilder("step1", jobRepository)
                 .<Person, String> chunk(10, transactionManager)
                 .reader(personReader)
                 .processor(compositeItemProcessor)
                 .writer(personWriter)
+                .faultTolerant()
+                .skip(Exception.class)
+                .skipLimit(20)
+                .listener(emptyInputListener)
+                .listener(personItemReadListener)
                 .build();
-    }
-
-    @Bean
-    public JobExecutionListener personJobListenerBean() {
-        return new JobExecutionListener() {
-            @Override
-            public void beforeJob(final JobExecution jobExecution) {
-                log.info("-----> Job has started <-----");
-            }
-            @Override
-            public void afterJob(final JobExecution jobExecution) {
-                if (jobExecution.getStatus() == BatchStatus.COMPLETED) {
-                    log.info("-----> Job has ended successfully <-----");
-                } else {
-                    log.info("-----> Job has ended with error <-----");
-                }
-            }
-        };
     }
 
     @Bean
